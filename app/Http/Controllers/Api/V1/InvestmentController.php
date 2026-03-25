@@ -178,9 +178,21 @@ class InvestmentController extends Controller
         // Manual balances set by user
         $manualBalances = $user->globalAccountBalances()->get();
         $manualByCurrency = [];
+        $manualTotalBrl = 0;
+        $currencyService = new \App\Services\CurrencyService();
         foreach ($manualBalances as $mb) {
+            $rate = $currencyService->getExchangeRate($mb->currency, 'BRL');
+            $brlValue = $rate ? round((float) $mb->balance * $rate, 2) : null;
             $manualByCurrency[$mb->currency] = (float) $mb->balance;
+            if ($brlValue !== null) {
+                $manualTotalBrl += $brlValue;
+            }
         }
+
+        // Global account total for dashboard: use manual balances (converted) if set, otherwise net_brl
+        $globalTotalBrl = !empty($manualByCurrency)
+            ? round($manualTotalBrl, 2)
+            : round($globalDepositsBrl - $globalWithdrawnTotal, 2);
 
         return response()->json([
             'total_balance' => round($totalBalance, 2),
@@ -193,6 +205,7 @@ class InvestmentController extends Controller
                 'total_returned_brl' => round($globalReturnsBrl, 2),
                 'total_spent_brl' => round($globalSpendsBrl, 2),
                 'net_brl' => round($globalDepositsBrl - $globalWithdrawnTotal, 2),
+                'total_brl' => $globalTotalBrl,
                 'by_currency' => $globalByCurrency,
                 'manual_balances' => $manualByCurrency,
             ],

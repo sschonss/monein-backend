@@ -130,6 +130,7 @@ class ImportController extends Controller
 
         $imported = 0;
         $skipped = 0;
+        $addedByCurrency = ['USD' => 0, 'EUR' => 0];
 
         foreach ($request->transactions as $tx) {
             $exists = $user->transactions()
@@ -156,10 +157,29 @@ class ImportController extends Controller
                 'notes' => 'Conta Global (' . $tx['currency'] . ') - Importado do extrato PicPay - ' . $tx['time'],
             ]);
 
+            $addedByCurrency[$tx['currency']] += (float) $tx['amount'];
             $imported++;
         }
 
-        // Check if user has manual balances that may need updating
+        // Auto-increment manual balances with estimated foreign currency amount
+        $currencyService = new \App\Services\CurrencyService();
+        foreach ($addedByCurrency as $currency => $brlAmount) {
+            if ($brlAmount <= 0) continue;
+
+            $manualBalance = \App\Models\GlobalAccountBalance::where('user_id', $user->id)
+                ->where('currency', $currency)
+                ->first();
+
+            if ($manualBalance) {
+                $rate = $currencyService->getExchangeRate('BRL', $currency);
+                if ($rate) {
+                    $foreignAmount = round($brlAmount * $rate, 2);
+                    $manualBalance->balance += $foreignAmount;
+                    $manualBalance->save();
+                }
+            }
+        }
+
         $hasManualBalances = \App\Models\GlobalAccountBalance::where('user_id', $user->id)->exists();
 
         return response()->json([
