@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\CurrencyController;
 use App\Http\Controllers\Api\V1\DashboardController;
+use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\RecurringTransactionController;
 use App\Http\Controllers\Api\V1\TagController;
 use App\Http\Controllers\Api\V1\TransactionController;
@@ -26,5 +27,10 @@ Route::prefix('v1')->group(function () {
         Route::post('/recurring-transactions/{id}/toggle', [RecurringTransactionController::class, 'toggle']);
         Route::get('/dashboard', [DashboardController::class, 'index']);
         Route::get('/currency/rate', [CurrencyController::class, 'rate']);
+
+        Route::get('/profile', [ProfileController::class, 'show']);
+        Route::put('/profile', [ProfileController::class, 'update']);
+        Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
+        Route::delete('/profile', [ProfileController::class, 'destroy']);
     });
 });
