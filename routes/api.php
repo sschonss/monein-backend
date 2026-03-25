@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\V1\TagController;
 use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\ImportController;
 use App\Http\Controllers\Api\V1\InvestmentController;
+use App\Http\Controllers\Api\V1\PushSubscriptionController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -46,5 +47,18 @@ Route::prefix('v1')->group(function () {
         Route::put('/profile', [ProfileController::class, 'update']);
         Route::put('/profile/password', [ProfileController::class, 'updatePassword']);
         Route::delete('/profile', [ProfileController::class, 'destroy']);
+
+        Route::get('/push/vapid-key', [PushSubscriptionController::class, 'vapidKey']);
+        Route::post('/push/subscribe', [PushSubscriptionController::class, 'store']);
+        Route::delete('/push/unsubscribe', [PushSubscriptionController::class, 'destroy']);
     });
+});
+
+// Cron endpoint for scheduled notifications (called by external cron/scheduler)
+Route::get('/v1/cron/extract-reminder', function (\Illuminate\Http\Request $request) {
+    if ($request->query('key') !== config('services.cron_key')) {
+        return response()->json(['error' => 'Unauthorized'], 403);
+    }
+    \Illuminate\Support\Facades\Artisan::call('notify:extract-reminder');
+    return response()->json(['message' => 'Done']);
 });
