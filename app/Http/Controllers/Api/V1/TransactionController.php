@@ -39,6 +39,19 @@ class TransactionController extends Controller
             });
         }
 
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('description', 'ilike', "%{$search}%")
+                  ->orWhere('notes', 'ilike', "%{$search}%");
+
+                if (is_numeric(str_replace(['.', ','], ['', '.'], $search))) {
+                    $numericVal = (float) str_replace(['.', ','], ['', '.'], $search);
+                    $q->orWhereBetween('amount_brl', [$numericVal - 0.01, $numericVal + 0.01]);
+                }
+            });
+        }
+
         $transactions = $query->orderBy('date', 'desc')
             ->orderBy('created_at', 'desc')
             ->paginate(20);
