@@ -34,6 +34,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/import/confirm-global', [ImportController::class, 'confirmGlobal']);
 
         Route::get('/investments/global-account', [InvestmentController::class, 'globalAccount']);
+        Route::post('/investments/global-account/spend', [InvestmentController::class, 'globalAccountSpend']);
         Route::get('/investments/summary', [InvestmentController::class, 'summary']);
         Route::get('/investments/accounts', [InvestmentController::class, 'accounts']);
         Route::get('/investments/accounts/{id}', [InvestmentController::class, 'show']);

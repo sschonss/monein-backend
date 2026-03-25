@@ -143,16 +143,26 @@ class InvestmentController extends Controller
         })->where('name', 'Conta Global')->first();
 
         $globalReturnsBrl = 0;
-        $globalReturnsCount = 0;
+        $globalSpendsBrl = 0;
         if ($globalCategory) {
+            // AstroPay returns (money back to PicPay)
             $returns = $user->transactions()
                 ->where('type', 'income')
                 ->where('category_id', $globalCategory->id)
-                ->selectRaw("COALESCE(SUM(amount_brl), 0) as total_brl, COUNT(*) as count")
+                ->selectRaw("COALESCE(SUM(amount_brl), 0) as total_brl")
                 ->first();
             $globalReturnsBrl = (float) ($returns->total_brl ?? 0);
-            $globalReturnsCount = (int) ($returns->count ?? 0);
+
+            // Manual spends (money spent from global account)
+            $spends = $user->transactions()
+                ->where('type', 'expense')
+                ->where('category_id', $globalCategory->id)
+                ->selectRaw("COALESCE(SUM(amount_brl), 0) as total_brl")
+                ->first();
+            $globalSpendsBrl = (float) ($spends->total_brl ?? 0);
         }
+
+        $globalWithdrawnTotal = $globalReturnsBrl + $globalSpendsBrl;
 
         $globalDepositsBrl = 0;
         $globalByCurrency = [];
@@ -174,8 +184,8 @@ class InvestmentController extends Controller
             'global_account' => [
                 'total_deposited_brl' => round($globalDepositsBrl, 2),
                 'total_returned_brl' => round($globalReturnsBrl, 2),
-                'net_brl' => round($globalDepositsBrl - $globalReturnsBrl, 2),
-                'returns_count' => $globalReturnsCount,
+                'total_spent_brl' => round($globalSpendsBrl, 2),
+                'net_brl' => round($globalDepositsBrl - $globalWithdrawnTotal, 2),
                 'by_currency' => $globalByCurrency,
             ],
         ]);
@@ -266,6 +276,7 @@ class InvestmentController extends Controller
 
         // Returns (type=income, category=Conta Global - AstroPay)
         $returns = collect();
+        $spends = collect();
         if ($categoryId) {
             $returns = $user->transactions()
                 ->where('type', 'income')
@@ -281,10 +292,26 @@ class InvestmentController extends Controller
                     'currency' => 'BRL',
                     'direction' => 'return',
                 ]);
+
+            // Manual spends (type=expense, category=Conta Global)
+            $spends = $user->transactions()
+                ->where('type', 'expense')
+                ->where('category_id', $categoryId)
+                ->orderByDesc('date')
+                ->get()
+                ->map(fn ($t) => [
+                    'id' => $t->id,
+                    'date' => $t->date->format('Y-m-d'),
+                    'description' => $t->description,
+                    'amount' => (float) $t->amount,
+                    'amount_brl' => (float) $t->amount_brl,
+                    'currency' => $t->currency,
+                    'direction' => 'spend',
+                ]);
         }
 
         // Merge and sort by date desc
-        $transactions = $deposits->concat($returns)->sortByDesc('date')->values();
+        $transactions = $deposits->concat($returns)->concat($spends)->sortByDesc('date')->values();
 
         // Totals by currency (deposits only)
         $totals = $user->transactions()
@@ -298,11 +325,19 @@ class InvestmentController extends Controller
                 'count' => (int) $g->count,
             ]);
 
-        // Total returns
-        $totalReturns = $categoryId ? (float) $user->transactions()
-            ->where('type', 'income')
-            ->where('category_id', $categoryId)
-            ->sum('amount_brl') : 0;
+        // Total withdrawn (returns + spends)
+        $totalReturns = 0;
+        $totalSpends = 0;
+        if ($categoryId) {
+            $totalReturns = (float) $user->transactions()
+                ->where('type', 'income')
+                ->where('category_id', $categoryId)
+                ->sum('amount_brl');
+            $totalSpends = (float) $user->transactions()
+                ->where('type', 'expense')
+                ->where('category_id', $categoryId)
+                ->sum('amount_brl');
+        }
 
         // Monthly evolution (deposits + returns)
         $monthlyDeposits = $user->transactions()
@@ -315,29 +350,82 @@ class InvestmentController extends Controller
             ->keyBy(fn ($m) => \Carbon\Carbon::parse($m->month)->format('M/y'));
 
         $monthlyReturns = collect();
+        $monthlySpends = collect();
         if ($categoryId && !$currency) {
             $monthlyReturns = $user->transactions()
                 ->where('type', 'income')
                 ->where('category_id', $categoryId)
-                ->selectRaw("DATE_TRUNC('month', date) as month, SUM(amount_brl) as returns")
+                ->selectRaw("DATE_TRUNC('month', date) as month, SUM(amount_brl) as total")
+                ->groupByRaw("DATE_TRUNC('month', date)")
+                ->orderByRaw("DATE_TRUNC('month', date)")
+                ->get()
+                ->keyBy(fn ($m) => \Carbon\Carbon::parse($m->month)->format('M/y'));
+
+            $monthlySpends = $user->transactions()
+                ->where('type', 'expense')
+                ->where('category_id', $categoryId)
+                ->selectRaw("DATE_TRUNC('month', date) as month, SUM(amount_brl) as total")
                 ->groupByRaw("DATE_TRUNC('month', date)")
                 ->orderByRaw("DATE_TRUNC('month', date)")
                 ->get()
                 ->keyBy(fn ($m) => \Carbon\Carbon::parse($m->month)->format('M/y'));
         }
 
-        $allMonths = $monthlyDeposits->keys()->merge($monthlyReturns->keys())->unique()->sort();
+        $allMonths = $monthlyDeposits->keys()->merge($monthlyReturns->keys())->merge($monthlySpends->keys())->unique()->sort();
         $monthly = $allMonths->map(fn ($month) => [
             'month' => $month,
             'deposits' => round((float) ($monthlyDeposits[$month]->deposits ?? 0), 2),
-            'returns' => round((float) ($monthlyReturns[$month]->returns ?? 0), 2),
+            'returns' => round((float) (($monthlyReturns[$month]->total ?? 0) + ($monthlySpends[$month]->total ?? 0)), 2),
         ])->values();
 
         return response()->json([
             'transactions' => $transactions,
             'totals' => $totals,
-            'total_returns' => round($totalReturns, 2),
+            'total_returns' => round($totalReturns + $totalSpends, 2),
             'monthly' => $monthly,
+        ]);
+    }
+
+    public function globalAccountSpend(Request $request)
+    {
+        $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'date' => 'required|date',
+            'description' => 'nullable|string|max:255',
+            'currency' => 'required|in:USD,EUR',
+        ]);
+
+        $user = $request->user();
+
+        $category = \App\Models\Category::where(function ($q) use ($user) {
+            $q->where('user_id', $user->id)->orWhere('is_default', true);
+        })->where('name', 'Conta Global')->first();
+
+        if (!$category) {
+            $category = \App\Models\Category::create([
+                'name' => 'Conta Global',
+                'type' => 'investment',
+                'color' => '#475569',
+                'icon' => 'globe',
+                'user_id' => $user->id,
+            ]);
+        }
+
+        $transaction = $user->transactions()->create([
+            'type' => 'expense',
+            'description' => $request->description ?: 'Gasto Conta Global',
+            'amount' => $request->amount,
+            'currency' => $request->currency,
+            'exchange_rate' => null,
+            'amount_brl' => $request->amount,
+            'date' => $request->date,
+            'category_id' => $category->id,
+            'notes' => 'Gasto manual - Conta Global (' . $request->currency . ')',
+        ]);
+
+        return response()->json([
+            'message' => 'Gasto registrado',
+            'transaction' => $transaction,
         ]);
     }
 
