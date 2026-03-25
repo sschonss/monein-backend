@@ -54,4 +54,14 @@ class User extends Authenticatable
     {
         return $this->hasMany(RecurringTransaction::class);
     }
+
+    public function investmentAccounts(): HasMany
+    {
+        return $this->hasMany(InvestmentAccount::class);
+    }
+
+    public function investmentMovements(): HasMany
+    {
+        return $this->hasMany(InvestmentMovement::class);
+    }
 }

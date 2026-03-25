@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\RecurringTransactionController;
 use App\Http\Controllers\Api\V1\TagController;
 use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\ImportController;
+use App\Http\Controllers\Api\V1\InvestmentController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -30,6 +31,12 @@ Route::prefix('v1')->group(function () {
         Route::get('/currency/rate', [CurrencyController::class, 'rate']);
 
         Route::post('/import/picpay', [ImportController::class, 'picpay']);
+
+        Route::get('/investments/summary', [InvestmentController::class, 'summary']);
+        Route::get('/investments/accounts', [InvestmentController::class, 'accounts']);
+        Route::get('/investments/accounts/{id}', [InvestmentController::class, 'show']);
+        Route::post('/investments/import/cofrinho', [InvestmentController::class, 'importCofrinho']);
+        Route::delete('/investments/accounts/{id}', [InvestmentController::class, 'destroy']);
 
         Route::get('/profile', [ProfileController::class, 'show']);
         Route::put('/profile', [ProfileController::class, 'update']);

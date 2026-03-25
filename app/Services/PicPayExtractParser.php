@@ -16,6 +16,8 @@ class PicPayExtractParser
     private const SKIP_TYPES = [
         'Pix devolvido',
         'Pix cancelado',
+        'Dinheiro guardado',
+        'Dinheiro resgatado',
     ];
 
     private const TYPE_MAP = [
@@ -24,8 +26,6 @@ class PicPayExtractParser
         'Compra realizada' => 'expense',
         'Pagamento realizado' => 'expense',
         'Transferência recebida' => 'income',
-        'Dinheiro guardado' => 'investment',
-        'Dinheiro resgatado' => 'income',
         'Venda de criptomoedas' => 'income',
         'Rendimento recebido' => 'income',
     ];
@@ -45,8 +45,6 @@ class PicPayExtractParser
         ['pattern' => '/Fatura PicPay Card|NU PAGAMENTOS|SANTANDER/i', 'name' => 'Cartão de Crédito', 'type' => 'expense', 'color' => '#0ea5e9'],
         ['pattern' => '/MITRA DIOCESANA|VAKINHA/i', 'name' => 'Doações', 'type' => 'expense', 'color' => '#14b8a6'],
         ['pattern' => '/Fio da Meada|MAGALUPAY|SBF COMERCIO|60818313/i', 'name' => 'Compras', 'type' => 'expense', 'color' => '#d946ef'],
-        ['pattern' => '/Dinheiro guardado|cofrinho.*guardado/i', 'name' => 'Poupança', 'type' => 'investment', 'color' => '#2563eb'],
-        ['pattern' => '/Dinheiro resgatado|cofrinho.*resgatado/i', 'name' => 'Resgate Poupança', 'type' => 'income', 'color' => '#0284c7'],
         ['pattern' => '/Para Conta Global/i', 'name' => 'Conta Global', 'type' => 'expense', 'color' => '#475569'],
         ['pattern' => '/Idealguapoltda|Cardoso e Schier/i', 'name' => 'Serviços', 'type' => 'expense', 'color' => '#78716c'],
     ];
