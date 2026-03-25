@@ -64,4 +64,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(InvestmentMovement::class);
     }
+
+    public function globalAccountBalances(): HasMany
+    {
+        return $this->hasMany(GlobalAccountBalance::class);
+    }
 }

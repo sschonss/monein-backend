@@ -175,6 +175,13 @@ class InvestmentController extends Controller
             ];
         }
 
+        // Manual balances set by user
+        $manualBalances = $user->globalAccountBalances()->get();
+        $manualByCurrency = [];
+        foreach ($manualBalances as $mb) {
+            $manualByCurrency[$mb->currency] = (float) $mb->balance;
+        }
+
         return response()->json([
             'total_balance' => round($totalBalance, 2),
             'total_deposited' => round($totalDeposited, 2),
@@ -187,6 +194,7 @@ class InvestmentController extends Controller
                 'total_spent_brl' => round($globalSpendsBrl, 2),
                 'net_brl' => round($globalDepositsBrl - $globalWithdrawnTotal, 2),
                 'by_currency' => $globalByCurrency,
+                'manual_balances' => $manualByCurrency,
             ],
         ]);
     }
@@ -378,11 +386,20 @@ class InvestmentController extends Controller
             'returns' => round((float) (($monthlyReturns[$month]->total ?? 0) + ($monthlySpends[$month]->total ?? 0)), 2),
         ])->values();
 
+        // Manual balances set by user
+        $manualBalances = $user->globalAccountBalances()
+            ->get()
+            ->map(fn ($b) => [
+                'currency' => $b->currency,
+                'balance' => (float) $b->balance,
+            ]);
+
         return response()->json([
             'transactions' => $transactions,
             'totals' => $totals,
             'total_returns' => round($totalReturns + $totalSpends, 2),
             'monthly' => $monthly,
+            'manual_balances' => $manualBalances,
         ]);
     }
 
@@ -426,6 +443,34 @@ class InvestmentController extends Controller
         return response()->json([
             'message' => 'Gasto registrado',
             'transaction' => $transaction,
+        ]);
+    }
+
+    public function globalAccountAdjust(Request $request)
+    {
+        $request->validate([
+            'balances' => 'required|array',
+            'balances.*.currency' => 'required|in:USD,EUR',
+            'balances.*.balance' => 'required|numeric|min:0',
+        ]);
+
+        $user = $request->user();
+        $results = [];
+
+        foreach ($request->balances as $entry) {
+            $balance = \App\Models\GlobalAccountBalance::updateOrCreate(
+                ['user_id' => $user->id, 'currency' => $entry['currency']],
+                ['balance' => $entry['balance']],
+            );
+            $results[] = [
+                'currency' => $balance->currency,
+                'balance' => (float) $balance->balance,
+            ];
+        }
+
+        return response()->json([
+            'message' => 'Saldo atualizado',
+            'balances' => $results,
         ]);
     }
 
