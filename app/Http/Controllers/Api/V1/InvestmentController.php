@@ -125,12 +125,38 @@ class InvestmentController extends Controller
             }
         }
 
+        // Include Conta Global transactions (type='investment' in transactions table)
+        $globalTransactions = $user->transactions()
+            ->where('type', 'investment')
+            ->selectRaw("
+                currency,
+                COALESCE(SUM(amount_brl), 0) as total_brl,
+                COUNT(*) as count
+            ")
+            ->groupBy('currency')
+            ->get();
+
+        $globalTotalBrl = 0;
+        $globalByCurrency = [];
+        foreach ($globalTransactions as $g) {
+            $globalTotalBrl += (float) $g->total_brl;
+            $globalByCurrency[] = [
+                'currency' => $g->currency,
+                'total_brl' => round((float) $g->total_brl, 2),
+                'count' => (int) $g->count,
+            ];
+        }
+
         return response()->json([
             'total_balance' => round($totalBalance, 2),
             'total_deposited' => round($totalDeposited, 2),
             'total_withdrawn' => round($totalWithdrawn, 2),
             'total_yield' => round($totalYield, 2),
             'accounts_count' => $accounts->count(),
+            'global_account' => [
+                'total_brl' => round($globalTotalBrl, 2),
+                'by_currency' => $globalByCurrency,
+            ],
         ]);
     }
 
