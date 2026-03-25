@@ -28,23 +28,27 @@ class ImportController extends Controller
         // Separate global account transactions
         $regularTransactions = [];
         $globalTransactions = [];
+        $globalReturnTransactions = [];
 
         foreach ($parsed as $tx) {
             if (!empty($tx['is_global_account'])) {
                 $globalTransactions[] = $tx;
+            } elseif (!empty($tx['is_global_account_return'])) {
+                $globalReturnTransactions[] = $tx;
             } else {
                 $regularTransactions[] = $tx;
             }
         }
 
-        // Ensure categories exist for regular transactions
-        $categoryMap = $this->ensureCategories($user, $regularTransactions);
+        // Ensure categories exist for regular + return transactions
+        $allRegular = array_merge($regularTransactions, $globalReturnTransactions);
+        $categoryMap = $this->ensureCategories($user, $allRegular);
 
         // Import regular transactions
         $imported = 0;
         $skipped = 0;
 
-        foreach ($regularTransactions as $tx) {
+        foreach (array_merge($regularTransactions, $globalReturnTransactions) as $tx) {
             $exists = $user->transactions()
                 ->where('date', $tx['date'])
                 ->where('description', $tx['description'])
@@ -57,8 +61,10 @@ class ImportController extends Controller
                 continue;
             }
 
+            $isReturn = !empty($tx['is_global_account_return']);
+
             $user->transactions()->create([
-                'type' => $tx['type'],
+                'type' => $isReturn ? 'income' : $tx['type'],
                 'description' => $tx['description'],
                 'amount' => $tx['amount'],
                 'currency' => 'BRL',
@@ -66,7 +72,7 @@ class ImportController extends Controller
                 'amount_brl' => $tx['amount'],
                 'date' => $tx['date'],
                 'category_id' => $categoryMap[$tx['category_name']] ?? null,
-                'notes' => 'Importado do extrato PicPay - ' . $tx['time'],
+                'notes' => ($isReturn ? 'Resgate Conta Global - ' : '') . 'Importado do extrato PicPay - ' . $tx['time'],
             ]);
 
             $imported++;

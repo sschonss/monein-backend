@@ -126,7 +126,8 @@ class InvestmentController extends Controller
         }
 
         // Include Conta Global transactions (type='investment' in transactions table)
-        $globalTransactions = $user->transactions()
+        // Deposits: type='investment', category='Conta Global'
+        $globalDeposits = $user->transactions()
             ->where('type', 'investment')
             ->selectRaw("
                 currency,
@@ -136,10 +137,27 @@ class InvestmentController extends Controller
             ->groupBy('currency')
             ->get();
 
-        $globalTotalBrl = 0;
+        // Returns: type='income', category='Conta Global' (AstroPay withdrawals)
+        $globalCategory = \App\Models\Category::where(function ($q) use ($user) {
+            $q->where('user_id', $user->id)->orWhere('is_default', true);
+        })->where('name', 'Conta Global')->first();
+
+        $globalReturnsBrl = 0;
+        $globalReturnsCount = 0;
+        if ($globalCategory) {
+            $returns = $user->transactions()
+                ->where('type', 'income')
+                ->where('category_id', $globalCategory->id)
+                ->selectRaw("COALESCE(SUM(amount_brl), 0) as total_brl, COUNT(*) as count")
+                ->first();
+            $globalReturnsBrl = (float) ($returns->total_brl ?? 0);
+            $globalReturnsCount = (int) ($returns->count ?? 0);
+        }
+
+        $globalDepositsBrl = 0;
         $globalByCurrency = [];
-        foreach ($globalTransactions as $g) {
-            $globalTotalBrl += (float) $g->total_brl;
+        foreach ($globalDeposits as $g) {
+            $globalDepositsBrl += (float) $g->total_brl;
             $globalByCurrency[] = [
                 'currency' => $g->currency,
                 'total_brl' => round((float) $g->total_brl, 2),
@@ -154,7 +172,10 @@ class InvestmentController extends Controller
             'total_yield' => round($totalYield, 2),
             'accounts_count' => $accounts->count(),
             'global_account' => [
-                'total_brl' => round($globalTotalBrl, 2),
+                'total_deposited_brl' => round($globalDepositsBrl, 2),
+                'total_returned_brl' => round($globalReturnsBrl, 2),
+                'net_brl' => round($globalDepositsBrl - $globalReturnsBrl, 2),
+                'returns_count' => $globalReturnsCount,
                 'by_currency' => $globalByCurrency,
             ],
         ]);
@@ -213,6 +234,110 @@ class InvestmentController extends Controller
             'imported' => $imported,
             'skipped' => $skipped,
             'total' => count($parsed['movements']),
+        ]);
+    }
+
+    public function globalAccount(Request $request)
+    {
+        $user = $request->user();
+        $currency = $request->query('currency');
+
+        // Get the Conta Global category
+        $globalCategory = \App\Models\Category::where(function ($q) use ($user) {
+            $q->where('user_id', $user->id)->orWhere('is_default', true);
+        })->where('name', 'Conta Global')->first();
+
+        $categoryId = $globalCategory?->id;
+
+        // Deposits (type=investment)
+        $depositsQuery = $user->transactions()->where('type', 'investment');
+        if ($currency) {
+            $depositsQuery->where('currency', $currency);
+        }
+        $deposits = $depositsQuery->orderByDesc('date')->get()->map(fn ($t) => [
+            'id' => $t->id,
+            'date' => $t->date->format('Y-m-d'),
+            'description' => $t->description,
+            'amount' => (float) $t->amount,
+            'amount_brl' => (float) $t->amount_brl,
+            'currency' => $t->currency,
+            'direction' => 'deposit',
+        ]);
+
+        // Returns (type=income, category=Conta Global - AstroPay)
+        $returns = collect();
+        if ($categoryId) {
+            $returns = $user->transactions()
+                ->where('type', 'income')
+                ->where('category_id', $categoryId)
+                ->orderByDesc('date')
+                ->get()
+                ->map(fn ($t) => [
+                    'id' => $t->id,
+                    'date' => $t->date->format('Y-m-d'),
+                    'description' => $t->description,
+                    'amount' => (float) $t->amount,
+                    'amount_brl' => (float) $t->amount_brl,
+                    'currency' => 'BRL',
+                    'direction' => 'return',
+                ]);
+        }
+
+        // Merge and sort by date desc
+        $transactions = $deposits->concat($returns)->sortByDesc('date')->values();
+
+        // Totals by currency (deposits only)
+        $totals = $user->transactions()
+            ->where('type', 'investment')
+            ->selectRaw("currency, COALESCE(SUM(amount_brl), 0) as total_brl, COUNT(*) as count")
+            ->groupBy('currency')
+            ->get()
+            ->map(fn ($g) => [
+                'currency' => $g->currency,
+                'total_brl' => round((float) $g->total_brl, 2),
+                'count' => (int) $g->count,
+            ]);
+
+        // Total returns
+        $totalReturns = $categoryId ? (float) $user->transactions()
+            ->where('type', 'income')
+            ->where('category_id', $categoryId)
+            ->sum('amount_brl') : 0;
+
+        // Monthly evolution (deposits + returns)
+        $monthlyDeposits = $user->transactions()
+            ->where('type', 'investment')
+            ->when($currency, fn ($q) => $q->where('currency', $currency))
+            ->selectRaw("DATE_TRUNC('month', date) as month, SUM(amount_brl) as deposits")
+            ->groupByRaw("DATE_TRUNC('month', date)")
+            ->orderByRaw("DATE_TRUNC('month', date)")
+            ->get()
+            ->keyBy(fn ($m) => \Carbon\Carbon::parse($m->month)->format('M/y'));
+
+        $monthlyReturns = collect();
+        if ($categoryId && !$currency) {
+            $monthlyReturns = $user->transactions()
+                ->where('type', 'income')
+                ->where('category_id', $categoryId)
+                ->selectRaw("DATE_TRUNC('month', date) as month, SUM(amount_brl) as returns")
+                ->groupByRaw("DATE_TRUNC('month', date)")
+                ->orderByRaw("DATE_TRUNC('month', date)")
+                ->get()
+                ->keyBy(fn ($m) => \Carbon\Carbon::parse($m->month)->format('M/y'));
+        }
+
+        $allMonths = $monthlyDeposits->keys()->merge($monthlyReturns->keys())->unique()->sort();
+        $monthly = $allMonths->map(fn ($month) => [
+            'month' => $month,
+            'deposits' => round((float) ($monthlyDeposits[$month]->deposits ?? 0), 2),
+            'returns' => round((float) ($monthlyReturns[$month]->returns ?? 0), 2),
+        ])->values();
+
+        return response()->json([
+            'transactions' => $transactions,
+            'totals' => $totals,
+            'total_returns' => round($totalReturns, 2),
+            'monthly' => $monthly,
         ]);
     }
 
