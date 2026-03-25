@@ -7,7 +7,7 @@ use Illuminate\Console\Command;
 
 class CleanupUserData extends Command
 {
-    protected $signature = 'user:cleanup {email}';
+    protected $signature = 'user:cleanup {email} {--force : Skip confirmation}';
 
     protected $description = 'Remove ALL transactions and investment accounts for a user, so they can re-import everything clean';
 
@@ -29,7 +29,7 @@ class CleanupUserData extends Command
         $this->line("  Investment accounts (cofrinhos): {$accCount}");
         $this->line("  Categories and tags will NOT be deleted.");
 
-        if (!$this->confirm('Delete all transactions and investment accounts? This cannot be undone.')) {
+        if (!$this->option('force') && !$this->confirm('Delete all transactions and investment accounts? This cannot be undone.')) {
             $this->info('Cancelled.');
             return 0;
         }
