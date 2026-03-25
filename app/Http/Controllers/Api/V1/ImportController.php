@@ -159,10 +159,14 @@ class ImportController extends Controller
             $imported++;
         }
 
+        // Check if user has manual balances that may need updating
+        $hasManualBalances = \App\Models\GlobalAccountBalance::where('user_id', $user->id)->exists();
+
         return response()->json([
             'message' => 'Transações da Conta Global importadas',
             'imported' => $imported,
             'skipped' => $skipped,
+            'needs_balance_update' => $hasManualBalances && $imported > 0,
         ]);
     }
 
