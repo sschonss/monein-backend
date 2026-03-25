@@ -11,76 +11,76 @@ class DashboardController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $period = $request->input('period', 'month'); // week, month, year, all
+        $period = $request->input('period', 'month');
 
         $now = Carbon::now();
 
         switch ($period) {
             case 'week':
-                $start = $now->copy()->startOfWeek();
-                $end = $now->copy()->endOfWeek();
+                $startDate = $now->copy()->startOfWeek()->toDateString();
+                $endDate = $now->copy()->endOfWeek()->toDateString();
                 break;
             case 'year':
-                $start = $now->copy()->startOfYear();
-                $end = $now->copy()->endOfYear();
+                $startDate = $now->copy()->startOfYear()->toDateString();
+                $endDate = $now->copy()->endOfYear()->toDateString();
                 break;
             case 'all':
-                $start = null;
-                $end = null;
+                $startDate = null;
+                $endDate = null;
                 break;
             default: // month
                 if ($request->filled('month')) {
                     $date = Carbon::createFromFormat('Y-m', $request->month);
-                    $start = $date->copy()->startOfMonth();
-                    $end = $date->copy()->endOfMonth();
+                    $startDate = $date->copy()->startOfMonth()->toDateString();
+                    $endDate = $date->copy()->endOfMonth()->toDateString();
                 } else {
-                    $start = $now->copy()->startOfMonth();
-                    $end = $now->copy()->endOfMonth();
+                    $startDate = $now->copy()->startOfMonth()->toDateString();
+                    $endDate = $now->copy()->endOfMonth()->toDateString();
                 }
                 break;
         }
 
-        $query = $user->transactions();
-        if ($start && $end) {
-            $query->whereBetween('date', [$start->toDateString(), $end->toDateString()]);
-        }
+        // Fresh query each time to avoid builder mutation
+        $baseQuery = function () use ($user, $startDate, $endDate) {
+            $q = $user->transactions();
+            if ($startDate && $endDate) {
+                $q->whereBetween('transactions.date', [$startDate, $endDate]);
+            }
+            return $q;
+        };
 
-        $totals = $query->selectRaw("
-            COALESCE(SUM(CASE WHEN type = 'income' THEN amount_brl ELSE 0 END), 0) as total_income,
-            COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_brl ELSE 0 END), 0) as total_expense,
-            COALESCE(SUM(CASE WHEN type = 'investment' THEN amount_brl ELSE 0 END), 0) as total_investment
-        ")->first();
+        $totals = $baseQuery()
+            ->selectRaw("
+                COALESCE(SUM(CASE WHEN transactions.type = 'income' THEN transactions.amount_brl ELSE 0 END), 0) as total_income,
+                COALESCE(SUM(CASE WHEN transactions.type = 'expense' THEN transactions.amount_brl ELSE 0 END), 0) as total_expense,
+                COALESCE(SUM(CASE WHEN transactions.type = 'investment' THEN transactions.amount_brl ELSE 0 END), 0) as total_investment
+            ")->first();
 
         $totalIncome = (float) $totals->total_income;
         $totalExpense = (float) $totals->total_expense;
         $totalInvestment = (float) $totals->total_investment;
 
-        $catQuery = $user->transactions()
+        $byCategory = $baseQuery()
             ->where('transactions.type', 'expense')
             ->join('categories', 'transactions.category_id', '=', 'categories.id')
             ->selectRaw('categories.name, SUM(transactions.amount_brl) as total, categories.color')
-            ->groupBy('categories.id', 'categories.name', 'categories.color');
+            ->groupBy('categories.id', 'categories.name', 'categories.color')
+            ->get();
 
-        if ($start && $end) {
-            $catQuery->whereBetween('transactions.date', [$start->toDateString(), $end->toDateString()]);
-        }
-
-        $byCategory = $catQuery->get();
-
-        // Monthly evolution - last 6 months (or 12 for year/all)
+        // Monthly evolution
         $evolutionMonths = ($period === 'year' || $period === 'all') ? 12 : 6;
         $monthlyEvolution = [];
         for ($i = $evolutionMonths - 1; $i >= 0; $i--) {
             $monthDate = $now->copy()->subMonths($i);
-            $monthStart = $monthDate->copy()->startOfMonth();
-            $monthEnd = $monthDate->copy()->endOfMonth();
+            $ms = $monthDate->copy()->startOfMonth()->toDateString();
+            $me = $monthDate->copy()->endOfMonth()->toDateString();
 
             $monthTotals = $user->transactions()
-                ->whereBetween('date', [$monthStart->toDateString(), $monthEnd->toDateString()])
+                ->whereBetween('transactions.date', [$ms, $me])
                 ->selectRaw("
-                    COALESCE(SUM(CASE WHEN type = 'income' THEN amount_brl ELSE 0 END), 0) as income,
-                    COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_brl ELSE 0 END), 0) as expense,
-                    COALESCE(SUM(CASE WHEN type = 'investment' THEN amount_brl ELSE 0 END), 0) as investment
+                    COALESCE(SUM(CASE WHEN transactions.type = 'income' THEN transactions.amount_brl ELSE 0 END), 0) as income,
+                    COALESCE(SUM(CASE WHEN transactions.type = 'expense' THEN transactions.amount_brl ELSE 0 END), 0) as expense,
+                    COALESCE(SUM(CASE WHEN transactions.type = 'investment' THEN transactions.amount_brl ELSE 0 END), 0) as investment
                 ")
                 ->first();
 
