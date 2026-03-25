@@ -73,6 +73,7 @@ class DashboardController extends Controller
 
         $byCategoryExpense = $categoryByType('expense');
         $byCategoryIncome = $categoryByType('income');
+        $byCategoryInvestment = $categoryByType('investment');
 
         // Monthly evolution
         $evolutionMonths = ($period === 'year' || $period === 'all') ? 12 : 6;
@@ -106,6 +107,7 @@ class DashboardController extends Controller
             'total_investment' => $totalInvestment,
             'by_category' => $byCategoryExpense,
             'by_category_income' => $byCategoryIncome,
+            'by_category_investment' => $byCategoryInvestment,
             'monthly_evolution' => $monthlyEvolution,
             'period' => $period,
         ]);
