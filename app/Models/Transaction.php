@@ -27,7 +27,7 @@ class Transaction extends Model
             'amount' => 'decimal:2',
             'exchange_rate' => 'decimal:6',
             'amount_brl' => 'decimal:2',
-            'date' => 'date',
+            'date' => 'date:Y-m-d',
         ];
     }
 

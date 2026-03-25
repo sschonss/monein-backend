@@ -42,7 +42,7 @@ class DashboardController extends Controller
 
         $query = $user->transactions();
         if ($start && $end) {
-            $query->whereBetween('date', [$start, $end]);
+            $query->whereBetween('date', [$start->toDateString(), $end->toDateString()]);
         }
 
         $totals = $query->selectRaw("
@@ -62,7 +62,7 @@ class DashboardController extends Controller
             ->groupBy('categories.id', 'categories.name', 'categories.color');
 
         if ($start && $end) {
-            $catQuery->whereBetween('transactions.date', [$start, $end]);
+            $catQuery->whereBetween('transactions.date', [$start->toDateString(), $end->toDateString()]);
         }
 
         $byCategory = $catQuery->get();
@@ -76,7 +76,7 @@ class DashboardController extends Controller
             $monthEnd = $monthDate->copy()->endOfMonth();
 
             $monthTotals = $user->transactions()
-                ->whereBetween('date', [$monthStart, $monthEnd])
+                ->whereBetween('date', [$monthStart->toDateString(), $monthEnd->toDateString()])
                 ->selectRaw("
                     COALESCE(SUM(CASE WHEN type = 'income' THEN amount_brl ELSE 0 END), 0) as income,
                     COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_brl ELSE 0 END), 0) as expense,
