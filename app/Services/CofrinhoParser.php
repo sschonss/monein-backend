@@ -38,37 +38,64 @@ class CofrinhoParser
 
         $name = $this->extractName($lines);
         $movements = [];
-        $currentDate = null;
-        $currentBalance = null;
+        $pendingMovements = [];
 
         foreach ($lines as $line) {
             $line = trim($line);
             if ($line === '') continue;
 
-            // Match: "Data: DD/mmm/YYYY Saldo ao final do dia: R$ X.XXX,XX"
-            if (preg_match('/^Data:\s+(\d{2})\/([\w]{3})\/(\d{4})\s+Saldo ao final do dia:\s+R\$\s*([\d.,]+)/u', $line, $m)) {
-                $month = self::MONTHS[mb_strtolower($m[2])] ?? null;
-                if ($month) {
-                    $currentDate = "{$m[3]}-{$month}-{$m[1]}";
-                    $currentBalance = (float) str_replace(['.', ','], ['', '.'], $m[4]);
-                }
-                continue;
-            }
-
-            // Match movement: "Guardado +R$ X.XXX,XX" or "Resgatado -R$ X.XXX,XX" or "Rendimentos +R$ X,XX"
-            if ($currentDate && preg_match('/^(Guardado|Resgatado|Rendimentos)\s+([+\x{2212}\-])R\$\s*([\d.,]+)/u', $line, $m)) {
+            // Match movement line (comes BEFORE the date/balance line in smalot output)
+            // "Guardado\t+R$ 4.000,00" or "Rendimentos\t+R$ 0,07"
+            if (preg_match('/^(Guardado|Resgatado|Rendimentos)\s+([+\x{2212}\-])R\$\s*([\d.,]+)/u', $line, $m)) {
                 $type = self::TYPE_MAP[$m[1]] ?? null;
                 if (!$type) continue;
 
                 $amount = (float) str_replace(['.', ','], ['', '.'], $m[3]);
                 if ($amount <= 0) continue;
 
-                $movements[] = [
-                    'date' => $currentDate,
+                $pendingMovements[] = [
                     'type' => $type,
                     'amount' => round($amount, 2),
-                    'balance_after' => $currentBalance ? round($currentBalance, 2) : null,
                 ];
+                continue;
+            }
+
+            // smalot format: "Saldo ao final do dia: R$ 4.000,00Data: 07/out/2025" (joined)
+            if (preg_match('/Saldo ao final do dia:\s*R\$\s*([\d.,]+)\s*Data:\s*(\d{2})\/([\w]{3})\/(\d{4})/u', $line, $m)) {
+                $balance = (float) str_replace(['.', ','], ['', '.'], $m[1]);
+                $month = self::MONTHS[mb_strtolower($m[3])] ?? null;
+                if ($month && !empty($pendingMovements)) {
+                    $date = "{$m[4]}-{$month}-{$m[2]}";
+                    foreach ($pendingMovements as $pm) {
+                        $movements[] = [
+                            'date' => $date,
+                            'type' => $pm['type'],
+                            'amount' => $pm['amount'],
+                            'balance_after' => round($balance, 2),
+                        ];
+                    }
+                    $pendingMovements = [];
+                }
+                continue;
+            }
+
+            // Standard format: "Data: DD/mmm/YYYY Saldo ao final do dia: R$ X.XXX,XX"
+            if (preg_match('/^Data:\s+(\d{2})\/([\w]{3})\/(\d{4})\s+Saldo ao final do dia:\s+R\$\s*([\d.,]+)/u', $line, $m)) {
+                $month = self::MONTHS[mb_strtolower($m[2])] ?? null;
+                if ($month && !empty($pendingMovements)) {
+                    $date = "{$m[3]}-{$month}-{$m[1]}";
+                    $balance = (float) str_replace(['.', ','], ['', '.'], $m[4]);
+                    foreach ($pendingMovements as $pm) {
+                        $movements[] = [
+                            'date' => $date,
+                            'type' => $pm['type'],
+                            'amount' => $pm['amount'],
+                            'balance_after' => round($balance, 2),
+                        ];
+                    }
+                    $pendingMovements = [];
+                }
+                continue;
             }
         }
 
