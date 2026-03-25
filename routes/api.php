@@ -31,6 +31,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/currency/rate', [CurrencyController::class, 'rate']);
 
         Route::post('/import/picpay', [ImportController::class, 'picpay']);
+        Route::post('/import/confirm-global', [ImportController::class, 'confirmGlobal']);
 
         Route::get('/investments/summary', [InvestmentController::class, 'summary']);
         Route::get('/investments/accounts', [InvestmentController::class, 'accounts']);

@@ -45,7 +45,7 @@ class PicPayExtractParser
         ['pattern' => '/Fatura PicPay Card|NU PAGAMENTOS|SANTANDER/i', 'name' => 'Cartão de Crédito', 'type' => 'expense', 'color' => '#0ea5e9'],
         ['pattern' => '/MITRA DIOCESANA|VAKINHA/i', 'name' => 'Doações', 'type' => 'expense', 'color' => '#14b8a6'],
         ['pattern' => '/Fio da Meada|MAGALUPAY|SBF COMERCIO|60818313/i', 'name' => 'Compras', 'type' => 'expense', 'color' => '#d946ef'],
-        ['pattern' => '/Para Conta Global/i', 'name' => 'Conta Global', 'type' => 'expense', 'color' => '#475569'],
+        ['pattern' => '/Para Conta Global/i', 'name' => 'Conta Global', 'type' => 'investment', 'color' => '#475569', 'is_global_account' => true],
         ['pattern' => '/Idealguapoltda|Cardoso e Schier/i', 'name' => 'Serviços', 'type' => 'expense', 'color' => '#78716c'],
     ];
 
@@ -223,6 +223,7 @@ class PicPayExtractParser
             'category_name' => $category['name'],
             'category_type' => $category['type'],
             'category_color' => $category['color'],
+            'is_global_account' => $category['is_global_account'] ?? false,
         ];
     }
 
@@ -263,6 +264,7 @@ class PicPayExtractParser
                     'name' => $rule['name'],
                     'type' => $rule['type'],
                     'color' => $rule['color'],
+                    'is_global_account' => $rule['is_global_account'] ?? false,
                 ];
             }
         }
