@@ -60,12 +60,19 @@ class DashboardController extends Controller
         $totalExpense = (float) $totals->total_expense;
         $totalInvestment = (float) $totals->total_investment;
 
-        $byCategory = $baseQuery()
-            ->where('transactions.type', 'expense')
-            ->join('categories', 'transactions.category_id', '=', 'categories.id')
-            ->selectRaw('categories.name, SUM(transactions.amount_brl) as total, categories.color')
-            ->groupBy('categories.id', 'categories.name', 'categories.color')
-            ->get();
+        $categoryByType = function (string $type) use ($baseQuery) {
+            return $baseQuery()
+                ->where('transactions.type', $type)
+                ->whereNotNull('transactions.category_id')
+                ->join('categories', 'transactions.category_id', '=', 'categories.id')
+                ->selectRaw('categories.name, SUM(transactions.amount_brl) as total, categories.color')
+                ->groupBy('categories.id', 'categories.name', 'categories.color')
+                ->orderByDesc('total')
+                ->get();
+        };
+
+        $byCategoryExpense = $categoryByType('expense');
+        $byCategoryIncome = $categoryByType('income');
 
         // Monthly evolution
         $evolutionMonths = ($period === 'year' || $period === 'all') ? 12 : 6;
@@ -97,7 +104,8 @@ class DashboardController extends Controller
             'total_income' => $totalIncome,
             'total_expense' => $totalExpense,
             'total_investment' => $totalInvestment,
-            'by_category' => $byCategory,
+            'by_category' => $byCategoryExpense,
+            'by_category_income' => $byCategoryIncome,
             'monthly_evolution' => $monthlyEvolution,
             'period' => $period,
         ]);

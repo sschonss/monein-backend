@@ -93,7 +93,7 @@ class PicPayExtractParser
             }
 
             // Check for date header: "DD de MMMM YYYY"
-            if (preg_match('/(\d{1,2})\s+de\s+(\w+)\s+(\d{4})/', $line, $dateMatch)) {
+            if (preg_match('/(\d{1,2})\s+de\s+([\p{L}]+)\s+(\d{4})/u', $line, $dateMatch)) {
                 $day = str_pad($dateMatch[1], 2, '0', STR_PAD_LEFT);
                 $monthName = mb_strtolower($dateMatch[2]);
                 $year = $dateMatch[3];
@@ -128,7 +128,7 @@ class PicPayExtractParser
                     if (
                         $nextLine === '' ||
                         preg_match('/^\d{2}:\d{2}\s+/', $nextLine) ||
-                        preg_match('/\d{1,2}\s+de\s+\w+\s+\d{4}/', $nextLine) ||
+                        preg_match('/\d{1,2}\s+de\s+[\p{L}]+\s+\d{4}/u', $nextLine) ||
                         $this->isSkipLine($nextLine)
                     ) {
                         break;
