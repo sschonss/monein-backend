@@ -5,49 +5,73 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
     public function index(Request $request)
     {
         $user = $request->user();
+        $period = $request->input('period', 'month'); // week, month, year, all
 
-        if ($request->filled('month')) {
-            $date = Carbon::createFromFormat('Y-m', $request->month);
-        } else {
-            $date = Carbon::now();
+        $now = Carbon::now();
+
+        switch ($period) {
+            case 'week':
+                $start = $now->copy()->startOfWeek();
+                $end = $now->copy()->endOfWeek();
+                break;
+            case 'year':
+                $start = $now->copy()->startOfYear();
+                $end = $now->copy()->endOfYear();
+                break;
+            case 'all':
+                $start = null;
+                $end = null;
+                break;
+            default: // month
+                if ($request->filled('month')) {
+                    $date = Carbon::createFromFormat('Y-m', $request->month);
+                    $start = $date->copy()->startOfMonth();
+                    $end = $date->copy()->endOfMonth();
+                } else {
+                    $start = $now->copy()->startOfMonth();
+                    $end = $now->copy()->endOfMonth();
+                }
+                break;
         }
 
-        $startOfMonth = $date->copy()->startOfMonth();
-        $endOfMonth = $date->copy()->endOfMonth();
+        $query = $user->transactions();
+        if ($start && $end) {
+            $query->whereBetween('date', [$start, $end]);
+        }
 
-        $totals = $user->transactions()
-            ->whereBetween('date', [$startOfMonth, $endOfMonth])
-            ->selectRaw("
-                COALESCE(SUM(CASE WHEN type = 'income' THEN amount_brl ELSE 0 END), 0) as total_income,
-                COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_brl ELSE 0 END), 0) as total_expense,
-                COALESCE(SUM(CASE WHEN type = 'investment' THEN amount_brl ELSE 0 END), 0) as total_investment
-            ")
-            ->first();
+        $totals = $query->selectRaw("
+            COALESCE(SUM(CASE WHEN type = 'income' THEN amount_brl ELSE 0 END), 0) as total_income,
+            COALESCE(SUM(CASE WHEN type = 'expense' THEN amount_brl ELSE 0 END), 0) as total_expense,
+            COALESCE(SUM(CASE WHEN type = 'investment' THEN amount_brl ELSE 0 END), 0) as total_investment
+        ")->first();
 
         $totalIncome = (float) $totals->total_income;
         $totalExpense = (float) $totals->total_expense;
         $totalInvestment = (float) $totals->total_investment;
 
-        // Expenses grouped by category
-        $byCategory = $user->transactions()
+        $catQuery = $user->transactions()
             ->where('type', 'expense')
-            ->whereBetween('date', [$startOfMonth, $endOfMonth])
             ->join('categories', 'transactions.category_id', '=', 'categories.id')
             ->selectRaw('categories.name, SUM(transactions.amount_brl) as total, categories.color')
-            ->groupBy('categories.id', 'categories.name', 'categories.color')
-            ->get();
+            ->groupBy('categories.id', 'categories.name', 'categories.color');
 
-        // Monthly evolution - last 6 months
+        if ($start && $end) {
+            $catQuery->whereBetween('transactions.date', [$start, $end]);
+        }
+
+        $byCategory = $catQuery->get();
+
+        // Monthly evolution - last 6 months (or 12 for year/all)
+        $evolutionMonths = ($period === 'year' || $period === 'all') ? 12 : 6;
         $monthlyEvolution = [];
-        for ($i = 5; $i >= 0; $i--) {
-            $monthDate = $date->copy()->subMonths($i);
+        for ($i = $evolutionMonths - 1; $i >= 0; $i--) {
+            $monthDate = $now->copy()->subMonths($i);
             $monthStart = $monthDate->copy()->startOfMonth();
             $monthEnd = $monthDate->copy()->endOfMonth();
 
@@ -75,6 +99,7 @@ class DashboardController extends Controller
             'total_investment' => $totalInvestment,
             'by_category' => $byCategory,
             'monthly_evolution' => $monthlyEvolution,
+            'period' => $period,
         ]);
     }
 }
