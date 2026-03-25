@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\RecurringTransactionController;
 use App\Http\Controllers\Api\V1\TagController;
 use App\Http\Controllers\Api\V1\TransactionController;
+use App\Http\Controllers\Api\V1\ImportController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -27,6 +28,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/recurring-transactions/{id}/toggle', [RecurringTransactionController::class, 'toggle']);
         Route::get('/dashboard', [DashboardController::class, 'index']);
         Route::get('/currency/rate', [CurrencyController::class, 'rate']);
+
+        Route::post('/import/picpay', [ImportController::class, 'picpay']);
 
         Route::get('/profile', [ProfileController::class, 'show']);
         Route::put('/profile', [ProfileController::class, 'update']);
