@@ -51,6 +51,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/push/vapid-key', [PushSubscriptionController::class, 'vapidKey']);
         Route::post('/push/subscribe', [PushSubscriptionController::class, 'store']);
         Route::delete('/push/unsubscribe', [PushSubscriptionController::class, 'destroy']);
+        Route::post('/push/test', [PushSubscriptionController::class, 'test']);
     });
 });
 

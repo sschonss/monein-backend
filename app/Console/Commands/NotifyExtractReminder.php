@@ -13,11 +13,6 @@ class NotifyExtractReminder extends Command
 
     public function handle(): void
     {
-        if (now()->dayOfWeek !== 1) { // 1 = Monday
-            $this->info('Not Monday, skipping.');
-            return;
-        }
-
         $pushService = new WebPushService();
         $userIds = PushSubscription::distinct()->pluck('user_id')->toArray();
         $count = 0;

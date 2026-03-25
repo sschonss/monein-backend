@@ -53,4 +53,23 @@ class PushSubscriptionController extends Controller
 
         return response()->json(['message' => 'Desinscrito com sucesso.']);
     }
+
+    public function test(Request $request)
+    {
+        $user = $request->user();
+        $count = PushSubscription::where('user_id', $user->id)->count();
+
+        if ($count === 0) {
+            return response()->json(['message' => 'Nenhuma inscrição encontrada.'], 404);
+        }
+
+        $pushService = new \App\Services\WebPushService();
+        $pushService->notifyUser($user->id, [
+            'title' => 'Monein - Teste',
+            'body' => 'Notificações estão funcionando!',
+            'url' => '/dashboard',
+        ]);
+
+        return response()->json(['message' => "Notificação enviada para {$count} dispositivo(s)."]);
+    }
 }
