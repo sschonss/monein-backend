@@ -56,7 +56,7 @@ class DashboardController extends Controller
         $totalInvestment = (float) $totals->total_investment;
 
         $catQuery = $user->transactions()
-            ->where('type', 'expense')
+            ->where('transactions.type', 'expense')
             ->join('categories', 'transactions.category_id', '=', 'categories.id')
             ->selectRaw('categories.name, SUM(transactions.amount_brl) as total, categories.color')
             ->groupBy('categories.id', 'categories.name', 'categories.color');
