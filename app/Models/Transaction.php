@@ -19,6 +19,7 @@ class Transaction extends Model
         'amount_brl',
         'date',
         'notes',
+        'pluggy_transaction_id',
     ];
 
     protected function casts(): array
