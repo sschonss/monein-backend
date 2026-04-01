@@ -42,10 +42,4 @@ return [
 
     'cron_key' => env('CRON_SECRET_KEY', 'change-me'),
 
-    'pluggy' => [
-        'client_id' => env('PLUGGY_CLIENT_ID'),
-        'client_secret' => env('PLUGGY_CLIENT_SECRET'),
-        'api_url' => env('PLUGGY_API_URL', 'https://api.pluggy.ai'),
-    ],
-
 ];

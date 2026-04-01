@@ -10,7 +10,6 @@ use App\Http\Controllers\Api\V1\TagController;
 use App\Http\Controllers\Api\V1\TransactionController;
 use App\Http\Controllers\Api\V1\ImportController;
 use App\Http\Controllers\Api\V1\InvestmentController;
-use App\Http\Controllers\Api\V1\PluggyController;
 use App\Http\Controllers\Api\V1\PushSubscriptionController;
 use Illuminate\Support\Facades\Route;
 
@@ -53,13 +52,6 @@ Route::prefix('v1')->group(function () {
         Route::post('/push/subscribe', [PushSubscriptionController::class, 'store']);
         Route::delete('/push/unsubscribe', [PushSubscriptionController::class, 'destroy']);
         Route::post('/push/test', [PushSubscriptionController::class, 'test']);
-
-        // Pluggy Open Finance
-        Route::post('/pluggy/connect-token', [PluggyController::class, 'createConnectToken']);
-        Route::post('/pluggy/items', [PluggyController::class, 'storeItem']);
-        Route::get('/pluggy/connections', [PluggyController::class, 'listConnections']);
-        Route::post('/pluggy/connections/{id}/sync', [PluggyController::class, 'syncTransactions']);
-        Route::delete('/pluggy/connections/{id}', [PluggyController::class, 'deleteConnection']);
     });
 });
 
